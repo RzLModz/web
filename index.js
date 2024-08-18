@@ -1,40 +1,51 @@
-const express = require('express');
-const path = require('path');
-const app = express();
-const port = 80;
+const http = require("http");
+const fs = require("fs");
+const WebSocket = require("ws");
+const cluster = require("cluster");
+const os = require("os");
 
-let rcount = {};
-const maxpath = 10;
+const cpus = os.cpus().length;
+const port = 8080;
+const index = fs.readFileSync("./index.html");
 
-app.use((req, res, next) => {
-  const path = req.path;
-  rcount[path] = (rcount[path] || 0) + 1;
-  next();
-});
+if (cluster.isMaster) {
+  console.log(`Number of CPUs is ${cpus}`);
+  console.log(`Master ${process.pid} is running`);
 
-app.use(express.static(path.join(__dirname, 'asset')));
+  let requests = 0;
+  let childs = [];
+  for (let i = 0; i < cpus; i++) {
+    let child = cluster.fork();
+    child.on("message", (msg) => {
+      requests++;
+    });
+    childs.push(child);
+  }
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'html', 'index.html'));
-});
+  setInterval(() => {
+    for (let child of childs) {
+      child.send(requests);
+    }
+    requests = 0;
+  }, 1000);
+} else {
+  console.log(`Worker ${process.pid} started`);
 
-app.get('/api/stats', (req, res) => {
-  const rvlnd = Object.entries(rcount)
-    .sort(([, countA], [, countB]) => countB - countA)
-    .slice(0, maxpath);
+  const handler = function (req, res) {
+    if (req.url == "/dstat") {
+      process.send(0);
+      res.end();
+    } else {
+      res.end(index);
+    }
+  };
 
-  const toppath = rvlnd.map(([path, count]) => ({ path, requests: count }));
-  
-  res.json({
-    totalrps: Object.values(rcount).reduce((acc, count) => acc + count, 0),
-    toppath: toppath,
+  const server = http.createServer(handler);
+  const wss = new WebSocket.Server({ server });
+
+  process.on("message", (requests) => {
+    wss.clients.forEach((client) => client.send(requests));
   });
-});
 
-setInterval(() => {
-  rcount = {};
-}, 1000);
-
-app.listen(port, () => {
-  console.log(`dstat is running. - @OverloadServer`);
-});
+  server.listen(port);
+}
