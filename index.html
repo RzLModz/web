@@ -10,7 +10,7 @@
             font-family: Arial, sans-serif;
             text-align: center;
             margin: 20px;
-            background: url('https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif') no-repeat center center fixed;
+            background: url('https://images.unsplash.com/photo-1519125323398-675f0ddb6308') no-repeat center center fixed;
             background-size: cover;
             color: white;
         }
@@ -30,18 +30,25 @@
             display: inline-block;
         }
 
-        audio {
-            display: none;
+        .audio-control {
+            margin-top: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 10px;
         }
     </style>
 </head>
 <body>
     <h2>Grafik Permintaan HTTP (Layer 7)</h2>
     <canvas id="requestChart"></canvas>
-    <audio autoplay loop>
-        <source src="https://www.bensound.com/bensound-music/bensound-epic.mp3" type="audio/mpeg">
-        Your browser does not support the audio element.
-    </audio>
+    <div class="audio-control">
+        <button onclick="playMusic()">Play Music</button>
+        <button onclick="pauseMusic()">Pause Music</button>
+        <audio id="backgroundMusic">
+            <source src="https://www.bensound.com/bensound-music/bensound-epic.mp3" type="audio/mpeg">
+            Your browser does not support the audio element.
+        </audio>
+    </div>
 
     <script>
         const ctx = document.getElementById('requestChart').getContext('2d');
@@ -97,29 +104,40 @@
 
         const requestChart = new Chart(ctx, config);
 
-        // Fungsi untuk mensimulasikan jumlah request
-        function getRandomRequests() {
-            return Math.floor(Math.random() * 100) + 50; // Random antara 50 dan 150
-        }
+        // Fungsi untuk mengambil data dari server
+        function fetchData() {
+            fetch('data.php')
+                .then(response => response.json())
+                .then(json => {
+                    const currentTime = json.time;
+                    const requests = json.requests;
 
-        function updateChart() {
-            const currentTime = new Date().toLocaleTimeString();
+                    // Tambahkan data baru
+                    labels.push(currentTime);
+                    data.datasets[0].data.push(requests);
 
-            // Tambahkan data baru
-            labels.push(currentTime);
-            data.datasets[0].data.push(getRandomRequests());
+                    // Batasi jumlah data yang tampil
+                    if (labels.length > 20) {
+                        labels.shift();
+                        data.datasets[0].data.shift();
+                    }
 
-            // Batasi jumlah data yang tampil
-            if (labels.length > 20) {
-                labels.shift();
-                data.datasets[0].data.shift();
-            }
-
-            requestChart.update();
+                    requestChart.update();
+                })
+                .catch(error => console.error('Error fetching data:', error));
         }
 
         // Update grafik setiap 2 detik
-        setInterval(updateChart, 2000);
+        setInterval(fetchData, 2000);
+
+        // Kontrol musik
+        function playMusic() {
+            document.getElementById('backgroundMusic').play();
+        }
+
+        function pauseMusic() {
+            document.getElementById('backgroundMusic').pause();
+        }
     </script>
 </body>
 </html>
